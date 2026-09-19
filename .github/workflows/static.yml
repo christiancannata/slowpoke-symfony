@@ -33,4 +33,7 @@ jobs:
       - name: Static analysis
         run: phpstan analyse --no-progress
       - name: Known vulnerabilities in dependencies
-        run: composer audit --no-interaction
+        # --no-dev: what this bundle asks an application to install, which is three Symfony
+        # components. The development set deliberately pins the oldest supported releases -
+        # a Twig from the Symfony 5.4 era carries fifteen advisories and is nobody's runtime.
+        run: composer audit --no-interaction --no-dev
