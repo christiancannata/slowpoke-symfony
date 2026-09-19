@@ -5,6 +5,8 @@
 <p align="center">
 <a href="https://github.com/christiancannata/slowpoke-symfony/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/christiancannata/slowpoke-symfony/actions/workflows/tests.yml/badge.svg"></a>
 <a href="https://github.com/christiancannata/slowpoke-symfony/actions/workflows/static.yml"><img alt="static analysis" src="https://github.com/christiancannata/slowpoke-symfony/actions/workflows/static.yml/badge.svg"></a>
+<a href="https://github.com/christiancannata/slowpoke-symfony/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/christiancannata/slowpoke-symfony/actions/workflows/codeql.yml/badge.svg"></a>
+<a href="#performance"><img alt="runtime dependencies: 0" src="https://img.shields.io/badge/runtime%20dependencies-0-brightgreen"></a>
 <a href="https://packagist.org/packages/slowpoke/symfony"><img alt="Packagist" src="https://img.shields.io/packagist/v/slowpoke/symfony"></a>
 <a href="https://packagist.org/packages/slowpoke/symfony"><img alt="PHP" src="https://img.shields.io/packagist/dependency-v/slowpoke/symfony/php"></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/christiancannata/slowpoke-symfony"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/christiancannata/slowpoke-symfony/badge"></a>
