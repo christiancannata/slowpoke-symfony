@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 - 2026-09-19
+
+Nothing changes in the bundle itself: the first public run of the test matrix found two things in
+the tests and fixed them.
+
+- The test application kept its cache under a directory named after the vendor directory, which in
+  a plain install is literally `vendor/`: the origin finder skips everything inside one, so the
+  compiled Twig templates were never resolved and a query in a template pointed at the controller.
+  The check that a template keeps its own line is back to testing what it says.
+- The cache warmup test asked the application for every optional warmer, which on Symfony 5.4 with
+  a current Twig dies inside twig-bundle. It asks this bundle's warmer instead, which is its
+  subject. `symfony/error-handler` is pinned with the other components in the matrix, or Composer
+  installs a newer major next to Symfony 5.4.
+
 ## 0.1.0 - 2026-09-18
 
 First release.

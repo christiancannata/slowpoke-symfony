@@ -34,13 +34,16 @@ jobs:
       - name: Install Symfony ${{ matrix.symfony }}
         env:
           COMPOSER_NO_SECURITY_BLOCKING: 1 # old component releases carry advisories: allowed for tests only
-        # Every component of the same release, or Composer mixes in newer ones (Messenger 7 with HttpKernel 6.4).
+          SYMFONY: ${{ matrix.symfony }}
+          DBAL: ${{ matrix.dbal }}
+        # Every component of the same release, or Composer mixes in newer ones (Messenger 7 with
+        # HttpKernel 6.4, symfony/error-handler 6.3 with the rest on 5.4).
         run: |
           with=""
           for c in framework-bundle http-kernel http-foundation dependency-injection config \
-                   event-dispatcher routing console messenger twig-bundle yaml; do
-            with="$with --with symfony/$c:${{ matrix.symfony }}"
+                   event-dispatcher routing console messenger twig-bundle yaml error-handler; do
+            with="$with --with symfony/$c:$SYMFONY"
           done
-          if [ -n "${{ matrix.dbal }}" ]; then with="$with --with doctrine/dbal:${{ matrix.dbal }}"; fi
+          if [ -n "$DBAL" ]; then with="$with --with doctrine/dbal:$DBAL"; fi
           composer update --no-interaction --no-progress $with
       - run: vendor/bin/phpunit

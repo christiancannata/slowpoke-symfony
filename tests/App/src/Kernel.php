@@ -46,8 +46,11 @@ class Kernel extends BaseKernel
 
     public function getCacheDir(): string
     {
-        // One cache per vendor directory: bin/test runs several Symfony versions side by side.
-        return $this->getProjectDir() . '/var/cache/' . basename(getenv('COMPOSER_VENDOR_DIR') ?: 'vendor') . '/' . $this->variant;
+        // One cache per dependency set: bin/test runs several Symfony versions side by side. The
+        // name is a hash on purpose - with the plain directory name the compiled Twig templates of
+        // a default install landed under ".../var/cache/vendor/", and the origin finder skips
+        // everything inside a vendor directory, so no query ever pointed at its template again.
+        return $this->getProjectDir() . '/var/cache/' . substr(sha1(getenv('COMPOSER_VENDOR_DIR') ?: 'default'), 0, 10) . '/' . $this->variant;
     }
 
     public function getLogDir(): string
@@ -86,6 +89,9 @@ class Kernel extends BaseKernel
 
         if ($this->variant === 'test') {
             $services->set('slowpoke.sender', FakeSender::class)->public();
+            // Only here: with slowpoke.enabled false the bundle registers nothing at all, and an
+            // alias to a service that does not exist stops the container from compiling.
+            $services->alias('test.route_templates', 'slowpoke.route_templates')->public();
         }
         if ($this->variant === 'agent') {
             $c->import(dirname(__DIR__, 3) . '/config/packages/slowpoke.yaml');

@@ -166,12 +166,15 @@ class RequestTraceTest extends AppTestCase
 
     public function testRouteTemplatesAreBuiltByCacheWarmup(): void
     {
-        // What bin/console cache:warmup does before a deploy: requests then never load the route collection.
+        // What bin/console cache:warmup does before a deploy: requests then never load the route
+        // collection. The bundle's own warmer is asked directly - running every optional warmer of
+        // the application would also run Twig's, and symfony/twig-bundle 5.4 with a current Twig
+        // dies in there, which is their argument and not this bundle's.
         $cacheDir = $this->kernel->getCacheDir();
         $file = $cacheDir . '/slowpoke/route_templates.php';
         @unlink($file);
-        $warmer = $this->kernel->getContainer()->get('cache_warmer');
-        $warmer->enableOptionalWarmers();
+        $warmer = $this->kernel->getContainer()->get('test.route_templates');
+        $this->assertTrue($warmer->isOptional(), 'a warmer that is not optional runs on every request');
         $warmer->warmUp($cacheDir);
         $this->assertFileExists($file);
         $this->assertSame('/orders/{id}', (require $file)['order_show']);
