@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 - 2026-09-19
+
+- The version the bundle reports to the agent is the version of the release: 0.1.1 still said 0.1.0.
+
 ## 0.1.1 - 2026-09-19
 
 Nothing changes in the bundle itself: the first public run of the test matrix found two things in
