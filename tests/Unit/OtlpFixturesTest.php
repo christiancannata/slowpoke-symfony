@@ -34,13 +34,15 @@ class OtlpFixturesTest extends TestCase
             $tracer->recordQuery('SELECT t0.id AS id_1, t0.name AS name_2 FROM customer t0 WHERE t0.id = ?', 0.9, 'pdo_mysql');
         }
         $clock->now += 0.01;
-        $tracer->finishRequest('/orders', '/orders', 200);
+        // Written as a browser sends it: the host is normalised, so a web server logging
+        // "shop.example.com" on another machine is recognised as the same requests.
+        $tracer->finishRequest('/orders', '/orders', 200, 'Shop.Example.com:8443');
         $tracer->flush();
         $out[] = [
             'name' => 'request with an N+1 in a Twig template',
             'payload' => json_decode($sender->payloads[0], true),
             'expect' => [
-                'route' => 'GET /orders', 'status' => 200, 'requests' => 1, 'source' => 'otlp:shop',
+                'route' => 'GET /orders', 'status' => 200, 'requests' => 1, 'source' => 'otlp:shop', 'site' => 'shop.example.com',
                 'queries' => [
                     ['statement' => 'SELECT id, customer_id FROM orders WHERE status = ? ORDER BY created_at DESC LIMIT 25', 'n' => 1, 'origin' => 'src/Controller/OrderController.php:18', 'n_plus_one' => false],
                     ['statement' => 'SELECT t0.id AS id_1, t0.name AS name_2 FROM customer t0 WHERE t0.id = ?', 'n' => 6, 'origin' => 'templates/orders/index.html.twig:7', 'n_plus_one' => true],

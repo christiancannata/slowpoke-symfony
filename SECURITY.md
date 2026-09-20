@@ -16,7 +16,12 @@ It runs inside your application, so it is kept small and easy to read (about 120
 
 - It only **reads** what Symfony already exposes: the matched route, the response status, the SQL of each query as
   the Doctrine driver received it, and a stack trace **without arguments** to find the application file and line.
-- It **never reads** binding values, request parameters, headers, cookies, sessions, users or exception messages.
+- Of the request it reads the method, the route template, the response status and the **host** it was
+  addressed to (the name in the `Host` header, without the port: `shop.example.com`), which is what lets
+  a web server in front of the application on another machine be recognised as reporting the same
+  requests instead of counting them twice.
+- It **never reads** binding values, request parameters, any other header, cookies, sessions, users or
+  exception messages.
 - It **sends** one trace per request, message or command, after the response, only to a plain `http://` address on the
   same machine or a private network (`127.0.0.1:4318` by default). Public addresses are refused.
 - It has a hard 0.1 s budget and swallows every error: a missing or broken agent can never break or slow a request.

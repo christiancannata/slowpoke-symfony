@@ -63,7 +63,7 @@ class RequestSubscriber implements EventSubscriberInterface
             $request = $event->getRequest();
             $name = $request->attributes->get('_route');
             $route = is_string($name) && $this->routes !== null ? $this->routes->template($name) : null;
-            $tracer->finishRequest($route, $request->getPathInfo(), $event->getResponse()->getStatusCode());
+            $tracer->finishRequest($route, $request->getPathInfo(), $event->getResponse()->getStatusCode(), $request->getHost());
         } catch (\Throwable $e) {
             $tracer->reset();
         }
