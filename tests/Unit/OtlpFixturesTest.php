@@ -125,6 +125,39 @@ class OtlpFixturesTest extends TestCase
             ],
         ];
 
+        [$tracer, $sender, $clock, $origin] = $this->tracer();
+        $tracer->startRequest('POST', $clock->now);
+        $clock->now += 0.005;
+        $origin->at = ['src/Controller/CheckoutController.php', 27];
+        $tracer->recordQuery('SELECT id, total FROM cart WHERE id = ?', 2.0, 'pdo_mysql');
+        $clock->now += 0.001;
+        $origin->at = ['src/Service/Stripe.php', 88];
+        $tracer->startHttpCall(1, 'POST', 'https://api.stripe.com/v1/payment_intents?expand=customer');
+        $clock->now += 0.42;
+        $tracer->finishHttpCall(1, 200, 'POST', 'https://api.stripe.com/v1/payment_intents?expand=customer');
+        $clock->now += 0.002;
+        $origin->at = null; // a call made from framework code only
+        $tracer->startHttpCall(2, 'GET', 'http://Partner.Example.com:8080/stock?sku=A1');
+        $clock->now += 1.5;
+        $tracer->finishHttpCall(2, null, 'GET', 'http://Partner.Example.com:8080/stock?sku=A1');
+        $clock->now += 0.003;
+        $tracer->finishRequest('/checkout', '/checkout', 200);
+        $tracer->flush();
+        $out[] = [
+            'name' => 'request with outbound calls: one to Stripe, one failed to a partner',
+            'payload' => json_decode($sender->payloads[0], true),
+            'expect' => [
+                'route' => 'POST /checkout', 'status' => 200, 'requests' => 1, 'source' => 'otlp:shop',
+                'queries' => [
+                    ['statement' => 'SELECT id, total FROM cart WHERE id = ?', 'n' => 1, 'origin' => 'src/Controller/CheckoutController.php:27', 'n_plus_one' => false],
+                ],
+                'outbound' => [
+                    ['host' => 'api.stripe.com', 'n' => 1, 'errors' => 0, 'origin' => 'src/Service/Stripe.php:88'],
+                    ['host' => 'partner.example.com:8080', 'n' => 1, 'errors' => 1, 'origin' => ''],
+                ],
+            ],
+        ];
+
         return $out;
     }
 

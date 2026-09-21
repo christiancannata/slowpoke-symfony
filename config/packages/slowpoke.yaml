@@ -14,6 +14,12 @@ slowpoke:
     timeout: '%env(default::SLOWPOKE_TIMEOUT)%'
     # SLOWPOKE_MAX_QUERIES, default 500: queries described per request or message; the rest are only counted.
     max_queries: '%env(default::SLOWPOKE_MAX_QUERIES)%'
+    # SLOWPOKE_HTTP_CLIENT, default true: record the outbound calls made with Symfony's HTTP client
+    # (method, remote host, status, duration, the line that made them; never the path, the query
+    # string, headers or bodies). A literal "http_client: false" here does not even decorate the client.
+    http_client: '%env(default::SLOWPOKE_HTTP_CLIENT)%'
+    # SLOWPOKE_MAX_HTTP_CALLS, default 200: outbound calls described per request or message; the rest are counted.
+    max_http_calls: '%env(default::SLOWPOKE_MAX_HTTP_CALLS)%'
     # Longer statements are cut (huge IN lists, bulk inserts).
     max_sql_length: 10000
     # Stack frames inspected to find the application line that ran a query.

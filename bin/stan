@@ -10,7 +10,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 php="${1:-7.4}"
-vendor="$(ls -d vendor/php$php-* 2>/dev/null | head -1)"
+vendor="$(ls -dt vendor/php$php-* 2>/dev/null | head -1)"  # the newest install for that PHP
 [ -n "$vendor" ] || { echo "run ./bin/test $php first: no vendor directory for it" >&2; exit 1; }
 exec docker run --rm --cpus 1 -v "$(pwd)":/pkg -w /pkg ghcr.io/phpstan/phpstan:2 \
 	analyse --no-progress --autoload-file "$vendor/autoload.php"

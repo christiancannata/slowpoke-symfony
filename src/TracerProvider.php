@@ -50,12 +50,24 @@ class TracerProvider
                     'service' => (string) ($s['service'] ?? '') !== '' ? (string) $s['service'] : 'symfony',
                     'max_queries' => self::number($s['max_queries'] ?? null, 500),
                     'max_sql_length' => self::number($s['max_sql_length'] ?? null, 10000),
+                    'max_http_calls' => self::number($s['max_http_calls'] ?? null, 200),
+                    'agent_endpoint' => (string) ($s['endpoint'] ?? '') !== '' ? (string) $s['endpoint'] : self::ENDPOINT,
                 ]
             );
         } catch (\Throwable $e) {
             $this->tracer = null;
         }
         return $this->tracer;
+    }
+
+    /** The tracer, when outbound HTTP calls are to be recorded too (SLOWPOKE_HTTP_CLIENT, default on). */
+    public function httpTracer(): ?Tracer
+    {
+        $enabled = $this->settings['http_client'] ?? null;
+        if ($enabled !== null && $enabled !== '' && !filter_var($enabled, FILTER_VALIDATE_BOOLEAN)) {
+            return null;
+        }
+        return $this->tracer();
     }
 
     /**

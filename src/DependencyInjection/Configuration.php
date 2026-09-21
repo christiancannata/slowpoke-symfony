@@ -21,7 +21,7 @@ class Configuration implements ConfigurationInterface
         $root = $tree->getRootNode();
         /** @var NodeBuilder $children */
         $children = $root->children();
-        $env = ['enabled', 'endpoint', 'service', 'timeout', 'max_queries'];
+        $env = ['enabled', 'endpoint', 'service', 'timeout', 'max_queries', 'http_client', 'max_http_calls'];
         foreach ($env as $name) {
             // SLOWPOKE_ENABLED, SLOWPOKE_OTLP_ENDPOINT, ... read at runtime, defaults in PHP.
             $variable = $name === 'endpoint' ? 'SLOWPOKE_OTLP_ENDPOINT' : 'SLOWPOKE_' . strtoupper($name);

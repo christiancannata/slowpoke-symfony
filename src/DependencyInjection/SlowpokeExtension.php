@@ -38,6 +38,9 @@ class SlowpokeExtension extends Extension
                 'service' => $config['service'],
                 'max_queries' => $config['max_queries'],
                 'max_sql_length' => $config['max_sql_length'],
+                'http_client' => $config['http_client'],
+                'max_http_calls' => $config['max_http_calls'],
+                'endpoint' => $config['endpoint'],
                 'backtrace_limit' => $config['backtrace_limit'],
                 'code_root' => $config['code_root'],
                 // Generated code is nobody's line to fix: the container, Doctrine proxies. Twig
@@ -68,6 +71,13 @@ class SlowpokeExtension extends Extension
             $container->register('slowpoke.console_subscriber', ConsoleSubscriber::class)
                 ->setArguments([new Reference('slowpoke.tracer_provider'), $config['skip_commands']])
                 ->addTag('kernel.event_subscriber');
+        }
+
+        // Outbound calls: the decorator is placed by HttpClientPass, once FrameworkBundle has said
+        // which client service exists. An environment variable turning it off is read at runtime.
+        if (filter_var($config['http_client'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) !== false
+            && trait_exists('Symfony\Component\HttpClient\AsyncDecoratorTrait')) {
+            $container->setParameter('slowpoke.http_client', true);
         }
 
         if (interface_exists('Doctrine\DBAL\Driver\Middleware')) {

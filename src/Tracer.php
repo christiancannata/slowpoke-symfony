@@ -7,11 +7,12 @@ namespace Slowpoke\Symfony;
  *
  * Collects one trace per HTTP request, handled message or console command and encodes it for the agent:
  * a SERVER (or CONSUMER) span and one CLIENT span per query, with the SQL as the driver received
- * it (placeholders, never binding values) and the application line that ran it.
+ * it (placeholders, never binding values) and the application line that ran it, plus one CLIENT
+ * span per outbound HTTP call, which names the remote host and nothing else of the URL.
  */
 class Tracer
 {
-    public const VERSION = '0.1.3';
+    public const VERSION = '0.1.4';
 
     private const SERVER = 2;
     private const CLIENT = 3;
@@ -33,12 +34,16 @@ class Tracer
     private $maxQueries;
     /** @var int */
     private $maxSqlLength;
+    /** @var int */
+    private $maxHttpCalls;
+    /** @var string|null "host:port" of the agent: the package never traces its own delivery */
+    private $agent;
     /** @var array<string, mixed>|null the trace being recorded */
     private $trace;
 
     /**
      * @param callable(): Sender $sender resolved only when a trace is sent
-     * @param array{service?: string, version?: string, max_queries?: int, max_sql_length?: int} $options
+     * @param array{service?: string, version?: string, max_queries?: int, max_sql_length?: int, max_http_calls?: int, agent_endpoint?: string} $options
      */
     public function __construct(OriginFinder $origin, callable $sender, array $options, ?callable $clock = null, ?callable $ids = null)
     {
@@ -48,6 +53,9 @@ class Tracer
         $this->version = (string) ($options['version'] ?? self::VERSION);
         $this->maxQueries = max(0, (int) ($options['max_queries'] ?? 500));
         $this->maxSqlLength = max(1, (int) ($options['max_sql_length'] ?? 10000));
+        $this->maxHttpCalls = max(0, (int) ($options['max_http_calls'] ?? 200));
+        $agent = isset($options['agent_endpoint']) ? self::target((string) $options['agent_endpoint']) : null;
+        $this->agent = $agent === null ? null : $agent[0] . ':' . $agent[1];
         $this->clock = $clock ?: function () { return microtime(true); };
         $this->ids = $ids ?: function (int $bytes) { return bin2hex(random_bytes($bytes)); };
     }
@@ -165,6 +173,80 @@ class Tracer
         }
     }
 
+    /**
+     * An outbound HTTP call leaves the application. $key pairs it with its end (the id of the
+     * request object); the URL is reduced to scheme, host and port here and never kept.
+     *
+     * @param int|string $key
+     */
+    public function startHttpCall($key, string $method, string $url): void
+    {
+        if ($this->trace === null || $this->trace['end'] !== null) {
+            return; // same rule as queries: outside requests and jobs nothing is recorded
+        }
+        try {
+            $target = self::target($url);
+            if ($target === null || $target[0] . ':' . $target[1] === $this->agent) {
+                return;
+            }
+            if (count($this->trace['http']) >= $this->maxHttpCalls) {
+                $this->trace['droppedHttp']++;
+                return;
+            }
+            if (count($this->trace['pending']) >= 64) {
+                $this->trace['pending'] = []; // ends that never came: they close with the trace
+            }
+            $this->trace['http'][] = [
+                'method' => strtoupper($method) ?: 'GET', 'host' => $target[0], 'port' => $target[2] ? null : $target[1],
+                'start' => ($this->clock)(), 'end' => null, 'status' => null, 'error' => false,
+                'origin' => $this->origin->find(),
+            ];
+            $this->trace['pending'][(string) $key] = count($this->trace['http']) - 1;
+        } catch (\Throwable $e) {
+            // never let observability break the call the application is making
+        }
+    }
+
+    /**
+     * The call ended: a response ($status), or a failure (null). When $key is unknown - Laravel 9+
+     * wraps the request of a failed connection in a new object - the latest open call to the same
+     * method and host is the one that ended. $end, when the client measured it, is more exact than
+     * the moment the application looked at the response.
+     *
+     * @param int|string $key
+     */
+    public function finishHttpCall($key, ?int $status, string $method, string $url, ?float $end = null): void
+    {
+        if ($this->trace === null || $this->trace['end'] !== null) {
+            return;
+        }
+        try {
+            $key = (string) $key;
+            $i = $this->trace['pending'][$key] ?? null;
+            if ($i === null && ($target = self::target($url)) !== null) {
+                $method = strtoupper($method);
+                foreach (array_reverse($this->trace['pending'], true) as $k => $candidate) {
+                    $call = $this->trace['http'][$candidate];
+                    if ($call['host'] === $target[0] && $call['method'] === $method) {
+                        [$key, $i] = [(string) $k, $candidate];
+                        break;
+                    }
+                }
+            }
+            if ($i === null) {
+                return;
+            }
+            unset($this->trace['pending'][$key]);
+            $call = &$this->trace['http'][$i];
+            $now = ($this->clock)();
+            $call['end'] = $end !== null && $end >= $call['start'] && $end <= $now ? $end : $now;
+            $call['status'] = $status;
+            $call['error'] = $status === null || $status >= 500;
+        } catch (\Throwable $e) {
+            // never let observability break the call the application is making
+        }
+    }
+
     /** Sends the finished trace, if any, and forgets it. */
     public function flush(): void
     {
@@ -197,6 +279,7 @@ class Tracer
             'kind' => $kind, 'name' => $name, 'start' => $start, 'end' => null, 'error' => false,
             'traceId' => ($this->ids)(16), 'spanId' => ($this->ids)(8),
             'attributes' => [], 'queries' => [], 'dropped' => 0,
+            'http' => [], 'pending' => [], 'droppedHttp' => 0,
         ];
     }
 
@@ -215,28 +298,26 @@ class Tracer
         if ($t['dropped'] > 0) {
             $root['attributes'][] = self::kv('slowpoke.dropped_queries', $t['dropped']);
         }
+        if ($t['droppedHttp'] > 0) {
+            $root['attributes'][] = self::kv('slowpoke.dropped_http_calls', $t['droppedHttp']);
+        }
         if ($t['error']) {
             $root['status'] = ['code' => 2];
         }
         $spans = [$root];
+        foreach ($t['http'] as $c) {
+            $attributes = [self::kv('http.request.method', $c['method']), self::kv('server.address', $c['host'])];
+            if ($c['port'] !== null) {
+                $attributes[] = self::kv('server.port', $c['port']);
+            }
+            if ($c['status'] !== null) {
+                $attributes[] = self::kv('http.response.status_code', $c['status']);
+            }
+            $spans[] = $this->clientSpan($t, $c['method'] . ' ' . $c['host'], $c['start'], $c['end'] ?? $t['end'], $attributes, $c['origin'], $c['end'] === null || $c['error']);
+        }
         foreach ($t['queries'] as $q) {
             $attributes = [self::kv('db.system.name', $q['system']), self::kv('db.query.text', $q['sql'])];
-            if ($q['origin'] !== null) {
-                $attributes[] = self::kv('code.file.path', $q['origin'][0]);
-                if ($q['origin'][1] !== null) {
-                    $attributes[] = self::kv('code.line.number', $q['origin'][1]);
-                }
-            }
-            $spans[] = [
-                'traceId' => $t['traceId'],
-                'spanId' => ($this->ids)(8),
-                'parentSpanId' => $t['spanId'],
-                'name' => strtoupper((string) strtok(ltrim($q['sql']), " \t\r\n(")),
-                'kind' => self::CLIENT,
-                'startTimeUnixNano' => self::nanos($q['start']),
-                'endTimeUnixNano' => self::nanos($q['end']),
-                'attributes' => $attributes,
-            ];
+            $spans[] = $this->clientSpan($t, strtoupper((string) strtok(ltrim($q['sql']), " \t\r\n(")), $q['start'], $q['end'], $attributes, $q['origin'], false);
         }
         $payload = ['resourceSpans' => [[
             'resource' => ['attributes' => [
@@ -255,6 +336,54 @@ class Tracer
             throw new \RuntimeException('cannot encode trace');
         }
         return $json;
+    }
+
+    /**
+     * @param array<string, mixed> $t
+     * @param array<int, array{key: string, value: array<string, mixed>}> $attributes
+     * @param array{0: string, 1: int|null}|null $origin
+     * @return array<string, mixed>
+     */
+    private function clientSpan(array $t, string $name, float $start, float $end, array $attributes, ?array $origin, bool $error): array
+    {
+        if ($origin !== null) {
+            $attributes[] = self::kv('code.file.path', $origin[0]);
+            if ($origin[1] !== null) {
+                $attributes[] = self::kv('code.line.number', $origin[1]);
+            }
+        }
+        $span = [
+            'traceId' => $t['traceId'],
+            'spanId' => ($this->ids)(8),
+            'parentSpanId' => $t['spanId'],
+            'name' => $name,
+            'kind' => self::CLIENT,
+            'startTimeUnixNano' => self::nanos($start),
+            'endTimeUnixNano' => self::nanos($end),
+            'attributes' => $attributes,
+        ];
+        if ($error) {
+            $span['status'] = ['code' => 2];
+        }
+        return $span;
+    }
+
+    /**
+     * Host (lower-case, no brackets), port, and whether that port is the scheme's default.
+     * Path, query string and credentials are never read.
+     *
+     * @return array{0: string, 1: int, 2: bool}|null
+     */
+    private static function target(string $url): ?array
+    {
+        $parts = @parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return null;
+        }
+        $scheme = strtolower((string) ($parts['scheme'] ?? 'http'));
+        $default = $scheme === 'https' ? 443 : 80;
+        $port = isset($parts['port']) ? (int) $parts['port'] : $default;
+        return [strtolower(trim($parts['host'], '[]')), $port, $port === $default];
     }
 
     /** 64-bit integers travel as strings. Microsecond precision is all PHP measures. */

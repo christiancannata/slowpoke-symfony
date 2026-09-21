@@ -17,7 +17,7 @@ if [ -z "$with" ]; then
     *) symfony="^7.0" ;;
   esac
   # Every component of the same release, or Composer mixes in newer ones (Messenger 7 with HttpKernel 6.4).
-  for c in framework-bundle http-kernel http-foundation dependency-injection config event-dispatcher routing console messenger twig-bundle yaml error-handler; do
+  for c in framework-bundle http-kernel http-foundation dependency-injection config event-dispatcher routing console messenger twig-bundle yaml error-handler http-client; do
     with="$with symfony/$c:$symfony"
   done
 fi

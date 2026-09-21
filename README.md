@@ -85,11 +85,11 @@ that to be measured. Everything else happens **after** your visitor already has 
 | **Sent on `kernel.terminate`** | under php-fpm the response has already reached the client (`fastcgi_finish_request`), so the send is on nobody's clock. Workers and commands send as soon as they are done |
 | **Never waits** | a hard time budget on the socket (`SLOWPOKE_TIMEOUT`, 0.1 s) and every error swallowed: an agent that is missing, slow or broken costs one trace, never a request |
 | **Never copies your data** | `debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)` with a bounded depth: no argument, ever |
-| **Bounded** | 500 queries described per request at most, the rest counted; statements over 10 000 characters cut |
+| **Bounded** | 500 queries and 200 outbound calls described per request at most, the rest counted; statements over 10 000 characters cut |
 | **Quiet when idle** | queries outside a request, a message or a command — a worker polling its transport, a `cache:clear` you ran by hand — are not recorded at all |
 | **Nothing when off** | `enabled: false` in the configuration registers no listener and no middleware at all: Doctrine is not even wrapped |
 
-1249 lines of PHP. Three Symfony components, all of which your application already has. No runtime
+1640 lines of PHP. Three Symfony components, all of which your application already has. No runtime
 dependency of its own.
 
 ## What is sent, and what never is
@@ -103,7 +103,12 @@ Sent only to the agent on your machine or private network:
   with an error;
 - **per query** — the SQL **with placeholders**, exactly as the Doctrine driver received it, the database
   engine, the real duration, and the first line of your own code on the stack, outside `vendor/`, outside
-  the kernel cache and outside this bundle.
+  the kernel cache and outside this bundle;
+- **per outbound HTTP call** made with Symfony's HTTP client (Stripe, a partner API, another service) —
+  the method, the remote **host** (and its port when it is not 80/443), the response status, how long it
+  took, whether it failed (a transport error or a 5xx), and the line of your code that made the call.
+  Never the URL path, the query string, headers or bodies: they carry tokens and personal data. Only when
+  `symfony/http-client` is installed; the bundle's own delivery to the agent is never traced.
 
 **Never sent** — bound parameter values, request parameters, headers, cookies, session, the user, exception
 messages. If you write literal values into raw SQL yourself (`$conn->executeQuery("… WHERE email =
@@ -120,10 +125,20 @@ Everything has a default that works. Nothing has to be set.
 | `SLOWPOKE_TIMEOUT` | `0.1` | seconds to connect, then to hand the trace over; past that it is dropped |
 | `SLOWPOKE_SERVICE` | `symfony` | the name of this application in Slowpoke |
 | `SLOWPOKE_MAX_QUERIES` | `500` | queries described per request, message or command; the rest are counted |
+| `SLOWPOKE_HTTP_CLIENT` | `true` | record outbound calls made with Symfony's HTTP client |
+| `SLOWPOKE_MAX_HTTP_CALLS` | `200` | outbound calls described per request, message or command; the rest are counted |
 
 In `config/packages/slowpoke.yaml`, on top of those: `messenger` and `commands` (both `true`) turn each
 kind of trace off, `skip_commands` adds command names to leave alone, `max_sql_length` (10 000),
 `backtrace_limit` (60) and `code_root` (`%kernel.project_dir%`, paths are sent relative to it).
+
+**Outbound calls.** The bundle decorates `http_client.transport` (Symfony 6.3+, which every scoped client
+is built on) or `http_client` (5.4). Responses are lazy, so the decorator is an async one, like Symfony's
+`RetryableHttpClient`: every chunk passes through it however you read the response — `getContent()`,
+`toArray()`, `stream()` over many, or not at all (the destructor) — and the last chunk or the error ends
+the span, with the time the client itself measured. On 6.3+ a retried call is one span per attempt.
+`http_client: false` in the configuration does not even decorate the client; the environment variable
+leaves the decorator in place but lets every call through untouched.
 
 Workers are never traced as a command — `messenger:consume` and friends would hold one trace open for
 hours and swallow the trace of every message they handle.
