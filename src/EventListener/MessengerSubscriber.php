@@ -2,6 +2,7 @@
 
 namespace Slowpoke\Symfony\EventListener;
 
+use Slowpoke\Symfony\MessageName;
 use Slowpoke\Symfony\TracerProvider;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
@@ -35,7 +36,7 @@ class MessengerSubscriber implements EventSubscriberInterface
     {
         try {
             if (($tracer = $this->provider->tracer()) !== null) {
-                $tracer->startJob(get_class($event->getEnvelope()->getMessage()), $event->getReceiverName());
+                $tracer->startJob(MessageName::of($event->getEnvelope()->getMessage()), $event->getReceiverName());
             }
         } catch (\Throwable $e) {
             // never let observability break the worker

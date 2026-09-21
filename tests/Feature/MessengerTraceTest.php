@@ -4,6 +4,8 @@ namespace Slowpoke\Symfony\Tests\Feature;
 
 use App\Message\SendInvoices;
 use Slowpoke\Symfony\Tests\Fixtures\FakeSender;
+use Symfony\Component\Console\Messenger\RunCommandMessage;
+use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\Worker;
 
@@ -54,6 +56,18 @@ class MessengerTraceTest extends AppTestCase
         $this->assertSame(2, $root['status']['code']);
         $this->assertCount(1, $queries);
         $this->assertStringNotContainsString('mail server', $this->sender()->payloads[0]);
+    }
+
+    /** Found in production on Laravel's twin: a queued command showed as its wrapper class. */
+    public function testAQueuedCommandIsNamedAfterTheCommand(): void
+    {
+        require_once dirname(__DIR__) . '/Fixtures/Wrappers/load.php';
+        $this->kernel->getContainer()->get('test.transport')->send(new Envelope(new RunCommandMessage('app:missing --owner=mario.rossi@example.com')));
+        $this->consumeOne();
+
+        [$root] = $this->sender()->onlyTrace();
+        $this->assertSame('app:missing', $root['name']);
+        $this->assertStringNotContainsString('mario.rossi', $this->sender()->payloads[0]);
     }
 
     public function testEachMessageIsSentAsSoonAsItIsHandled(): void

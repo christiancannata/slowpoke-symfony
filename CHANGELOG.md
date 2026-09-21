@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.5 - 2026-09-21
+
+- A Messenger message that only carries the real work is named after that work on the Jobs page, not
+  after the wrapper: a console command queued as `RunCommandMessage` is the command (`app:report`), a
+  `RedispatchMessage` is the message inside it, a scheduled `ServiceCallMessage` is
+  `Service::method`, and a `RunProcessMessage` is `process <executable>` (`process pg_dump`).
+  Arguments, options and command lines never reach the name: they may hold personal data or
+  passwords. The wrappers are recognised by name, so Symfony 5.4 and applications without the process
+  or scheduler components are unaffected.
+
 ## 0.1.4 - 2026-09-21
 
 - Outbound HTTP calls made with Symfony's HTTP client during a request, a message or a command are now

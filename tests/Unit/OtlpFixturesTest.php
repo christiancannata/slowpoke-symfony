@@ -3,7 +3,9 @@
 namespace Slowpoke\Symfony\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Slowpoke\Symfony\MessageName;
 use Slowpoke\Symfony\OriginFinder;
+use Symfony\Component\Console\Messenger\RunCommandMessage;
 use Slowpoke\Symfony\Tests\Fixtures\FakeSender;
 use Slowpoke\Symfony\Tracer;
 
@@ -100,6 +102,29 @@ class OtlpFixturesTest extends TestCase
                 'queries' => [
                     ['statement' => 'SELECT * FROM invoices WHERE sent_at IS NULL', 'n' => 1, 'origin' => 'src/MessageHandler/SendInvoicesHandler.php:31', 'n_plus_one' => false],
                     ['statement' => 'DELETE FROM messenger_messages WHERE id = ?', 'n' => 1, 'origin' => '', 'n_plus_one' => false],
+                ],
+            ],
+        ];
+
+        // A console command queued as a message: the Jobs page reads the command, never RunCommandMessage
+        // nor its arguments.
+        require_once dirname(__DIR__) . '/Fixtures/Wrappers/load.php';
+        [$tracer, $sender, $clock, $origin] = $this->tracer();
+        $tracer->startJob(MessageName::of(new RunCommandMessage('app:google-sheet:update --owner=mario@example.com')), 'async');
+        $origin->at = ['src/Command/UpdateGoogleSheetCommand.php', 52];
+        $clock->now += 1.2;
+        $tracer->recordQuery('SELECT * FROM orders WHERE created_at >= ?', 900.0, 'pdo_mysql');
+        $clock->now += 0.3;
+        $tracer->finishJob(false);
+        $tracer->flush();
+        $out[] = [
+            'name' => 'queued console command: named after the command, not the RunCommandMessage wrapper',
+            'payload' => json_decode($sender->payloads[0], true),
+            'expect' => [
+                'route' => 'job app:google-sheet:update', 'status' => 0, 'requests' => 1, 'source' => '',
+                'job' => ['kind' => 'job', 'name' => 'app:google-sheet:update', 'runs' => 1, 'failed' => 0],
+                'queries' => [
+                    ['statement' => 'SELECT * FROM orders WHERE created_at >= ?', 'n' => 1, 'origin' => 'src/Command/UpdateGoogleSheetCommand.php:52', 'n_plus_one' => false],
                 ],
             ],
         ];

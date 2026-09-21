@@ -12,7 +12,7 @@ namespace Slowpoke\Symfony;
  */
 class Tracer
 {
-    public const VERSION = '0.1.4';
+    public const VERSION = '0.1.5';
 
     private const SERVER = 2;
     private const CLIENT = 3;

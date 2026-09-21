@@ -98,7 +98,7 @@ Sent only to the agent on your machine or private network:
 
 - **per request** — method, route template (`/orders/{id}`), status code, start and end time. When no route
   matched, the path without its query string;
-- **per message** — the message class, the transport it came from, whether it failed;
+- **per message** — the message class (for `RunCommandMessage` and the other Symfony wrappers, the command or message inside), the transport it came from, whether it failed;
 - **per console command** — the command name (`app:invoices:close`), how long it took, whether it exited
   with an error;
 - **per query** — the SQL **with placeholders**, exactly as the Doctrine driver received it, the database
