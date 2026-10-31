@@ -29,7 +29,7 @@
     },
     "require-dev": {
         "doctrine/dbal": "^3.3|^4.0",
-        "doctrine/doctrine-bundle": "^2.7",
+        "doctrine/doctrine-bundle": "^3.3",
         "phpunit/phpunit": "^9.6|^10.5|^11.0|^12.0",
         "symfony/console": "^5.4|^6.4|^7.0",
         "symfony/framework-bundle": "^5.4|^6.4|^7.0",
